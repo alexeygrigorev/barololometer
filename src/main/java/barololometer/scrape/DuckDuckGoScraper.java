@@ -61,9 +61,15 @@ public class DuckDuckGoScraper implements SearchEngineScraper {
     }
 
     public static void main(String[] args) {
-        DuckDuckGoScraper bingScraper = new DuckDuckGoScraper();
-        SearchResults scrape = bingScraper.scrape("apple");
+        DuckDuckGoScraper scraper = new DuckDuckGoScraper();
+        SearchResults scrape = scraper.scrape("apple");
         List<RankedPage> pages = scrape.getPages();
         pages.forEach(System.out::println);
+
+        scraper.close();
+    }
+
+    @Override
+    public void close() {
     }
 }

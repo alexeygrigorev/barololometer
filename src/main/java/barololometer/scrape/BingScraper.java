@@ -103,6 +103,12 @@ public class BingScraper implements SearchEngineScraper {
 
         Iterable<RankedPage> allPages = Iterables.concat(first.getPages(), next.getPages());
         allPages.forEach(System.out::println);
+
+        bingScraper.close();
+    }
+
+    @Override
+    public void close() {
     }
 
 }

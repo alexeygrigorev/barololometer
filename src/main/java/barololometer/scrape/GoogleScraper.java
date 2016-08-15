@@ -19,7 +19,7 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
-public class GoogleScraper implements SearchEngineScraper, AutoCloseable {
+public class GoogleScraper implements SearchEngineScraper {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GoogleScraper.class);
     private static final String BASE_URL = "https://www.google.com/search?hl=en&gl=en";

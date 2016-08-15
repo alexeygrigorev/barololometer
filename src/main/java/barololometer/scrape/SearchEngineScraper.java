@@ -1,6 +1,6 @@
 package barololometer.scrape;
 
-public interface SearchEngineScraper {
+public interface SearchEngineScraper extends AutoCloseable {
 
     SearchResults scrape(String query);
 

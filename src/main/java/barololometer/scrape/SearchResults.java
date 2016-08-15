@@ -89,4 +89,8 @@ public class SearchResults {
         return this == NULL;
     }
 
+    public boolean isNotNothing() {
+        return !isNothing();
+    }
+
 }

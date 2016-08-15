@@ -71,7 +71,7 @@ public class RankedPage {
 
     @Override
     public String toString() {
-        return "RankedPage [query=" + query + ", page=" + page + ", position=" + position + ", url=" + url + ", title="
-                + title + ", snippet=" + snippet + "]";
+        return "RankedPage [engine=" + searchEngine + ", query=" + query + ", page=" + page + ", position=" + position
+                + ", url=" + url + ", title=" + title + ", snippet=" + snippet + "]";
     }
 }

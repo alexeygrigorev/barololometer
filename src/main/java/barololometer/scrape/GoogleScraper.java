@@ -4,6 +4,7 @@ import java.net.URLDecoder;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.commons.lang3.Validate;
 import org.apache.tomcat.util.net.URL;
@@ -51,27 +52,20 @@ public class GoogleScraper implements SearchEngineScraper {
 
         sleep();
 
-        List<WebElement> blocks = driver.findElements(By.cssSelector("div#res div.g"));
+        List<WebElement> blocks = driver.findElements(By.cssSelector("div.g"));
 
         for (WebElement element : blocks) {
-            WebElement link = element.findElement(By.cssSelector("h3.r a"));
-            String href = extractAddress(link.getAttribute("href"));
-            String title = link.getText();
+            try {
+                Optional<RankedPage> page = tryParse(query, element, pageNo, position);
+                if (!page.isPresent()) {
+                    continue;
+                }
 
-            WebElement snippetElement = element.findElement(By.cssSelector(".st"));
-            String snippet = snippetElement.getText();
-
-            RankedPage page = new RankedPage();
-            page.setPage(pageNo);
-            page.setPosition(position);
-            page.setUrl(href);
-            page.setQuery(query);
-            page.setTitle(title);
-            page.setSnippet(snippet.replace('\n', ' '));
-            page.setSearchEngine(SearchEngine.GOOGLE);
-
-            foundPages.add(page);
-            position++;
+                foundPages.add(page.get());
+                position++;
+            } catch (Exception e) {
+                LOGGER.warn("got exception while parsing: {}. {}", element, e.getMessage());
+            }
         }
 
         SearchResults searchResults = new SearchResults();
@@ -82,6 +76,30 @@ public class GoogleScraper implements SearchEngineScraper {
         searchResults.setParam("position", foundPages.size());
 
         return searchResults;
+    }
+
+    private Optional<RankedPage> tryParse(String query, WebElement resultBlock, int pageNo, int position) {
+        WebElement link = resultBlock.findElement(By.cssSelector("h3.r a"));
+        String href = extractAddress(link.getAttribute("href"));
+        String title = link.getText();
+
+        List<WebElement> snippetElement = resultBlock.findElements(By.cssSelector(".st"));
+        if (snippetElement.isEmpty()) {
+            return Optional.empty();
+        }
+
+        String snippet = snippetElement.get(0).getText();
+
+        RankedPage page = new RankedPage();
+        page.setPage(pageNo);
+        page.setPosition(position);
+        page.setUrl(href);
+        page.setQuery(query);
+        page.setTitle(title);
+        page.setSnippet(snippet.replace('\n', ' '));
+        page.setSearchEngine(SearchEngine.GOOGLE);
+
+        return Optional.of(page);
     }
 
     private String extractAddress(String href) {

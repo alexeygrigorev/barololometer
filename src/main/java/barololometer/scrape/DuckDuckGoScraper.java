@@ -13,7 +13,7 @@ public class DuckDuckGoScraper implements SearchEngineScraper {
 
     @Override
     public SearchResults scrape(String query) {
-        String url = "https://duckduckgo.com/lite?q=" + query.toLowerCase().replace(' ', '+');
+        String url = "https://duckduckgo.com/lite?q=" + HttpUtils.encode(query.toLowerCase());
 
         List<RankedPage> foundPages = Lists.newArrayListWithCapacity(30);
         String html = HttpUtils.userAgentRequest(url);

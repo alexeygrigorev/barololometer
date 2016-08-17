@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 
 public class GoogleScraper implements SearchEngineScraper {
 
+    private static final int SLEEP_TIME = 50;
     private static final Logger LOGGER = LoggerFactory.getLogger(GoogleScraper.class);
     private static final String BASE_URL = "https://www.google.com/search?hl=en&gl=en";
 
@@ -40,8 +41,8 @@ public class GoogleScraper implements SearchEngineScraper {
 
     @Override
     public SearchResults scrape(String query) {
-        String url = BASE_URL + "&q=" + query.toLowerCase().replace(' ', '+');
-        LOGGER.info("scraping page {} for {}, url: {}", query, url);
+        String url = BASE_URL + "&q=" + HttpUtils.encode(query.toLowerCase());
+        LOGGER.info("scraping page results for \"{}\", url: {}", query, url);
         return parseContent(query, url, 1, 1);
     }
 
@@ -124,7 +125,7 @@ public class GoogleScraper implements SearchEngineScraper {
 
     private static void sleep() {
         try {
-            Thread.sleep(300);
+            Thread.sleep(SLEEP_TIME);
         } catch (InterruptedException e) {
             throw Throwables.propagate(e);
         }
@@ -139,8 +140,8 @@ public class GoogleScraper implements SearchEngineScraper {
         int start = previos.getIntParam("position");
         int newPage = previos.getIntParam("page") + 1;
 
-        String url = BASE_URL + "&q=" + query.toLowerCase().replace(' ', '+') + "&start=" + start;
-        LOGGER.info("scraping page {} for {}, url: {}", query, url);
+        String url = BASE_URL + "&q=" + HttpUtils.encode(query.toLowerCase()) + "&start=" + start;
+        LOGGER.info("scraping page results for \"{}\", url: {}", query, url);
         return parseContent(query, url, start + 1, newPage);
     }
 

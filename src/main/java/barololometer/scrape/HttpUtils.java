@@ -1,8 +1,10 @@
 package barololometer.scrape;
 
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import org.apache.commons.io.IOUtils;
@@ -26,6 +28,14 @@ public class HttpUtils {
                 return IOUtils.toString(is, StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
+            throw Throwables.propagate(e);
+        }
+    }
+
+    public static String encode(String in) {
+        try {
+            return URLEncoder.encode(in, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
             throw Throwables.propagate(e);
         }
     }

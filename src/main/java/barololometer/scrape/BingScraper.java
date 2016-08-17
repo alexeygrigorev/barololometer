@@ -22,7 +22,7 @@ public class BingScraper implements SearchEngineScraper {
     @Override
     public SearchResults scrape(String query) {
         String url = baseUrl(query);
-        LOGGER.info("scraping page {} for {}, url: {}", query, url);
+        LOGGER.info("scraping page results for \"{}\", url: {}", query, url);
 
         String html = HttpUtils.userAgentRequest(url);
         List<RankedPage> foundPages = parseContent(query, html, 1, 1);
@@ -38,7 +38,7 @@ public class BingScraper implements SearchEngineScraper {
     }
 
     private static String baseUrl(String query) {
-        return BING_URL + "?cc=" + BING_COUNTRY + "&q=" + query.toLowerCase().replace(' ', '+');
+        return BING_URL + "?cc=" + BING_COUNTRY + "&q=" + HttpUtils.encode(query.toLowerCase());
     }
 
     private List<RankedPage> parseContent(String query, String html, int positionStart, int pageNo) {
@@ -80,7 +80,7 @@ public class BingScraper implements SearchEngineScraper {
 
         int newPage = previos.getIntParam("page") + 1;
 
-        LOGGER.info("scraping page {} for {}, page url: {}", query, url);
+        LOGGER.info("scraping page results for \"{}\", url: {}", query, url);
         String html = HttpUtils.userAgentRequest(url);
         List<RankedPage> foundPages = parseContent(query, html, nextResultOffset, newPage);
 
@@ -96,6 +96,10 @@ public class BingScraper implements SearchEngineScraper {
         return searchResults;
     }
 
+    @Override
+    public void close() {
+    }
+
     public static void main(String[] args) {
         BingScraper bingScraper = new BingScraper();
         SearchResults first = bingScraper.scrape("kaggle");
@@ -107,8 +111,5 @@ public class BingScraper implements SearchEngineScraper {
         bingScraper.close();
     }
 
-    @Override
-    public void close() {
-    }
 
 }

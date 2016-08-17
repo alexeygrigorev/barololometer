@@ -73,6 +73,7 @@ public class SearchCombiner implements AutoCloseable {
 
         List<Future<SearchResults>> futureResults = delaySecondPageCrawl(sessionUuid, firstPages);
         Set<String> shownUrls = extractUrls(firstPage);
+
         SearchSession session = new SearchSession(query, futureResults, remaining, shownUrls);
         sessions.put(sessionUuid, session);
 
@@ -84,42 +85,46 @@ public class SearchCombiner implements AutoCloseable {
         return results;
     }
 
-    private Set<String> extractUrls(List<RankedPage> firstPage) {
-        return firstPage.stream().map(RankedPage::getUrl).collect(Collectors.toSet());
-    }
-
     public CombinedSearchResults moreResults(String sessionUuid) throws SessionExpiredException {
-        SearchSession session = sessions.getIfPresent(sessionUuid);
-        if (session == null) {
+        SearchSession previousSession = sessions.getIfPresent(sessionUuid);
+        if (previousSession == null) {
             throw new SessionExpiredException();
         }
 
-        String nextUuid = UUID.randomUUID().toString();
-        List<SearchResults> newResults = session.futureResults.stream()
+        String newSessionUuid = UUID.randomUUID().toString();
+        List<SearchResults> newResults = newPageResults(previousSession.futureResults);
+        List<RankedPage> newPages = extractIndividualPages(newResults);
+
+        List<Future<SearchResults>> nextPageResults = delaySecondPageCrawl(sessionUuid, newResults);
+        Iterable<RankedPage> allPages = Iterables.concat(previousSession.unshownPages, newPages);
+        List<RankedPage> combined = combine(previousSession.shownUrls, allPages);
+
+        Set<String> allShownUrls = new HashSet<>(extractUrls(combined));
+        allShownUrls.addAll(previousSession.shownUrls);
+
+        List<RankedPage> remaining = Collections.emptyList();
+        SearchSession nextSession = new SearchSession(previousSession.query, nextPageResults, remaining, allShownUrls);
+        sessions.put(newSessionUuid, nextSession);
+
+        CombinedSearchResults results = new CombinedSearchResults();
+        results.setQuery(previousSession.query);
+        results.setSessionUuid(newSessionUuid);
+        results.setPages(combined);
+
+        return results;
+    }
+
+    private static Set<String> extractUrls(List<RankedPage> firstPage) {
+        return firstPage.stream().map(RankedPage::getUrl).collect(Collectors.toSet());
+    }
+
+    private static List<SearchResults> newPageResults(List<Future<SearchResults>> futureResults) {
+        return futureResults.stream()
                 .map(f -> getUnchecked(f))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .filter(SearchResults::isNotNothing)
                 .collect(Collectors.toList());
-
-        List<Future<SearchResults>> futureResults = delaySecondPageCrawl(sessionUuid, newResults);
-        List<RankedPage> newPages = newResults.stream().flatMap(r -> r.getPages().stream()).collect(Collectors.toList());
-        Iterable<RankedPage> allPages = Iterables.concat(session.unshownPages, newPages);
-        List<RankedPage> combined = combine(session.shownUrls, allPages);
-
-        Set<String> allShownUrls = new HashSet<>(extractUrls(combined));
-        allShownUrls.addAll(session.shownUrls);
-
-        List<RankedPage> remaining = Collections.emptyList();
-        SearchSession nextSession = new SearchSession(session.query, futureResults, remaining, allShownUrls);
-        sessions.put(nextUuid, nextSession);
-
-        CombinedSearchResults results = new CombinedSearchResults();
-        results.setQuery(session.query);
-        results.setSessionUuid(nextUuid);
-        results.setPages(combined);
-
-        return results;
     }
 
     private static Optional<SearchResults> getUnchecked(Future<SearchResults> f) {
@@ -130,32 +135,37 @@ public class SearchCombiner implements AutoCloseable {
         }
     }
 
-    private List<RankedPage> combineSearchResults(List<SearchResults> firstPages) {
-        List<RankedPage> pages = firstPages.stream().flatMap(r -> r.getPages().stream()).collect(Collectors.toList());
+    private static List<RankedPage> combineSearchResults(List<SearchResults> firstPages) {
+        List<RankedPage> pages = extractIndividualPages(firstPages);
         return combine(Collections.emptySet(), pages);
     }
 
-    private List<RankedPage> combine(Set<String> shownUrls, Iterable<RankedPage> pages) {
+    private static List<RankedPage> extractIndividualPages(List<SearchResults> searchResults) {
+        return searchResults.stream()
+                .flatMap(r -> r.getPages().stream())
+                .collect(Collectors.toList());
+    }
+
+    private static List<RankedPage> combine(Set<String> shownUrls, Iterable<RankedPage> pages) {
         ArrayListMultimap<SearchEngine, RankedPage> byEngine = groupBySearchEngine(pages);
         List<Iterator<RankedPage>> queue = filteringIterators(shownUrls, byEngine);
         return mergeIterators(queue);
     }
 
-    private ArrayListMultimap<SearchEngine, RankedPage> groupBySearchEngine(Iterable<RankedPage> pages) {
-        ArrayListMultimap<SearchEngine, RankedPage> byEngine = ArrayListMultimap.create();
-        for (RankedPage page : pages) {
-            byEngine.put(page.getSearchEngine(), page);
-        }
-        return byEngine;
+    private static ArrayListMultimap<SearchEngine, RankedPage> groupBySearchEngine(Iterable<RankedPage> pages) {
+        ArrayListMultimap<SearchEngine, RankedPage> groupByEngine = ArrayListMultimap.create();
+        pages.forEach(page -> groupByEngine.put(page.getSearchEngine(), page));
+        return groupByEngine;
     }
 
-    private List<Iterator<RankedPage>> filteringIterators(Set<String> shownUrls, ArrayListMultimap<SearchEngine, RankedPage> byEngine) {
-        UrlNotSeenPredicate uniqueUrls = new UrlNotSeenPredicate(shownUrls);
+    private static List<Iterator<RankedPage>> filteringIterators(Set<String> previousUrls,
+            ArrayListMultimap<SearchEngine, RankedPage> groups) {
+        UrlNotSeenPredicate uniqueUrls = new UrlNotSeenPredicate(previousUrls);
 
         List<Iterator<RankedPage>> queue = new ArrayList<>();
-        for (SearchEngine se : byEngine.keySet()) {
-            List<RankedPage> list = byEngine.get(se);
-            List<RankedPage> sorted = BY_POSITION.immutableSortedCopy(list);
+        for (SearchEngine se : groups.keySet()) {
+            List<RankedPage> group = groups.get(se);
+            List<RankedPage> sorted = BY_POSITION.immutableSortedCopy(group);
             Iterator<RankedPage> it = Iterators.filter(sorted.iterator(), uniqueUrls);
             queue.add(it);
         }
@@ -163,7 +173,7 @@ public class SearchCombiner implements AutoCloseable {
         return queue;
     }
 
-    private List<RankedPage> mergeIterators(List<Iterator<RankedPage>> iterators) {
+    private static List<RankedPage> mergeIterators(List<Iterator<RankedPage>> iterators) {
         List<RankedPage> results = new ArrayList<>(25);
 
         List<Iterator<RankedPage>> thisRound = new ArrayList<>(iterators);
@@ -186,11 +196,15 @@ public class SearchCombiner implements AutoCloseable {
         return results;
     }
 
-    private ImmutableList<Future<SearchResults>> delaySecondPageCrawl(String requestUuid, List<SearchResults> collect) {
+    private List<Future<SearchResults>> delaySecondPageCrawl(String requestUuid, List<SearchResults> collect) {
         ImmutableList.Builder<Future<SearchResults>> futures = ImmutableList.builder();
+
         for (SearchResults res : collect) {
+            if (res.isNothing()) {
+                continue;
+            }
+
             SearchEngine engine = res.getSearchEngine();
-            System.out.println(engine);
 
             ListenableScheduledFuture<SearchResults> future = delayedExecutor.schedule(() -> {
                 SearchEngineScraper scraper = scrapers.get(engine);
@@ -229,6 +243,7 @@ public class SearchCombiner implements AutoCloseable {
             return;
         }
 
+        System.out.println("SAVE TO DB IS CALLED!");
         LOGGER.info("saving results for {} from {}", result.getQuery(), result.getSearchEngine());
     }
 
@@ -282,8 +297,10 @@ public class SearchCombiner implements AutoCloseable {
         scrapers.put(SearchEngine.DUCK_DUCK_GO, new DuckDuckGoScraper());
         scrapers.put(SearchEngine.BING, new BingScraper());
         scrapers.put(SearchEngine.GOOGLE, GoogleScraper.phantomJs("/home/agrigorev/tmp/soft/phantomjs/bin/phantomjs"));
+
         SearchCombiner combiner = new SearchCombiner(scrapers);
-        CombinedSearchResults searchResults = combiner.firstPageSearch("enterprise java beans suck");
+
+        CombinedSearchResults searchResults = combiner.firstPageSearch("if you know what I mean");
         List<RankedPage> pages = searchResults.getPages();
         pages.forEach(System.out::println);
 
